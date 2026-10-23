@@ -1,0 +1,36 @@
+{
+  "name": "@gaushilp/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test:nav": "node scripts/test-navigation.ts",
+    "test:phase-b": "node scripts/test-phase-b.ts",
+    "test:phase-c": "node scripts/test-phase-c.ts",
+    "test:phase-d": "node scripts/test-phase-d.ts",
+    "test:phase-e": "node scripts/test-phase-e.ts",
+    "test:phase-f": "node scripts/test-phase-f.ts",
+    "test:phase-g": "node scripts/test-phase-g.ts",
+    "test:responsive": "node scripts/test-responsive-browser.mjs",
+    "test:phase-h": "node scripts/test-phase-h.ts"
+  },
+  "dependencies": {
+    "lucide-react": "^1.61.0",
+    "next": "16.4.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@12.14.0"
+}

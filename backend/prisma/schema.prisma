@@ -1,0 +1,852 @@
+// GauShilp OS - Prisma Schema
+// Step 2: Database Foundation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum PlatformRole {
+  SUPER_ADMIN // Platform-level administrative access, independent of tenants
+  USER // Standard platform user
+}
+
+enum TenantRole {
+  STORE_OWNER // Full control of store, team, catalog, orders & subscription
+  STORE_MANAGER // Operational management of store, products & orders
+  STORE_STAFF // Restricted operational access for assigned tasks
+  CUSTOMER // End-customer shopping account scoped to a specific tenant
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+// -----------------------------------------------------------------------------
+// Models
+// -----------------------------------------------------------------------------
+
+model User {
+  id               String       @id @default(uuid())
+  name             String
+  email            String       @unique
+  phone            String?
+  platformRole     PlatformRole @default(USER)
+  status           UserStatus   @default(ACTIVE)
+  suspendedAt      DateTime?
+  suspensionReason String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  memberships     TenantMembership[]
+  identities      UserIdentity[]
+  customerProfile CustomerProfile?
+  addresses       CustomerAddress[]
+  wishlistItems   WishlistItem[]
+  cart            Cart?
+  orders          Order[]
+  payments        PaymentRecord[]
+  notifications   Notification[]
+  storedFiles     StoredFile[]
+  auditLogs       AuditLog[]         @relation("UserAuditLogs")
+
+  @@index([status])
+  @@index([platformRole])
+  @@map("users")
+}
+
+model UserIdentity {
+  id              String   @id @default(uuid())
+  userId          String
+  provider        String
+  providerSubject String
+  email           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Enforce uniqueness for provider and subject to prevent duplicate mappings
+  @@unique([provider, providerSubject])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+model CustomerProfile {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  avatarUrl     String?
+  bio           String?
+  dateOfBirth   DateTime?
+  preferences   Json?
+  isActive      Boolean   @default(true)
+  deactivatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customer_profiles")
+}
+
+model CustomerAddress {
+  id           String   @id @default(uuid())
+  userId       String
+  fullName     String
+  phone        String
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  country      String   @default("IN")
+  landmark     String?
+  isDefault    Boolean  @default(false)
+  addressType  String   @default("HOME")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("customer_addresses")
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Tenant {
+  id           String       @id @default(uuid())
+  businessName String
+  storeSlug    String       @unique
+  description  String?
+  logoUrl      String?
+  bannerUrl    String?
+  contactEmail String?
+  contactPhone String?
+  address      String?
+  currency     String       @default("INR")
+  isPublished  Boolean      @default(false)
+  publishedAt  DateTime?
+  status       TenantStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  memberships           TenantMembership[]
+  categories            Category[]
+  products              Product[]
+  orders                Order[]
+  inventoryReservations InventoryReservation[]
+  paymentRecords        PaymentRecord[]
+  refunds               RefundRecord[]
+  subscription          Subscription?
+  subscriptionInvoices  SubscriptionInvoice[]
+  shipments             ShippingRecord[]
+  shipmentEvents        ShipmentEvent[]
+  notifications         Notification[]
+  outboxEvents          OutboxEvent[]
+  storedFiles           StoredFile[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("tenants")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  slug        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("categories")
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  tenantId    String
+  categoryId  String?
+  name        String
+  slug        String
+  description String?
+  price       Decimal       @db.Decimal(12, 2)
+  currency    String        @default("INR")
+  sku         String?
+  stock       Int           @default(0)
+  status      ProductStatus @default(DRAFT)
+  images      String[]      @default([])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category              Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  wishlistItems         WishlistItem[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  inventoryReservations InventoryReservation[]
+
+  @@unique([tenantId, slug])
+  @@unique([tenantId, sku])
+  @@index([tenantId, status])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, categoryId, status])
+  @@map("products")
+}
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String?  @unique
+  currency  String   @default("INR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@index([userId])
+  @@map("carts")
+}
+
+model CartItem {
+  id            String   @id @default(uuid())
+  cartId        String
+  productId     String
+  quantity      Int      @default(1)
+  priceSnapshot Decimal? @db.Decimal(12, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@map("wishlist_items")
+}
+
+model TenantMembership {
+  id        String           @id @default(uuid())
+  userId    String
+  tenantId  String
+  role      TenantRole
+  status    MembershipStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Enforce tenant isolation rule: A user can belong to multiple tenants,
+  // but cannot have duplicate memberships within the same tenant.
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_memberships")
+}
+
+// -----------------------------------------------------------------------------
+// Step 7: Order Management & Inventory Models
+// -----------------------------------------------------------------------------
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ReservationStatus {
+  RESERVED
+  FULFILLED
+  RELEASED
+}
+
+model Order {
+  id              String        @id @default(uuid())
+  orderNumber     String        @unique
+  userId          String
+  tenantId        String
+  status          OrderStatus   @default(PLACED)
+  paymentStatus   PaymentStatus @default(PENDING)
+  currency        String        @default("INR")
+  subtotal        Decimal       @db.Decimal(12, 2)
+  taxAmount       Decimal       @default(0) @db.Decimal(12, 2)
+  shippingAmount  Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal       @db.Decimal(12, 2)
+  shippingAddress Json
+  customerNote    String?
+  cancelReason    String?
+  cancelledAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  items         OrderItem[]
+  reservations  InventoryReservation[]
+  statusHistory OrderStatusHistory[]
+  payments      PaymentRecord[]
+  refunds       RefundRecord[]
+  shipments     ShippingRecord[]
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([createdAt])
+  @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  productId   String
+  productName String
+  sku         String?
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  quantity    Int
+  subtotal    Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model InventoryReservation {
+  id         String            @id @default(uuid())
+  tenantId   String
+  orderId    String
+  productId  String
+  quantity   Int
+  status     ReservationStatus @default(RESERVED)
+  releasedAt DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([orderId])
+  @@index([productId, status])
+  @@map("inventory_reservations")
+}
+
+model OrderStatusHistory {
+  id         String       @id @default(uuid())
+  orderId    String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  changedBy  String
+  reason     String?
+  createdAt  DateTime     @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+model IdempotencyRecord {
+  id        String   @id @default(uuid())
+  key       String
+  userId    String
+  action    String
+  response  Json
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([userId, key, action])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+// -----------------------------------------------------------------------------
+// Step 8: Payment Gateway & SaaS Subscriptions
+// -----------------------------------------------------------------------------
+
+enum PaymentRecordStatus {
+  PENDING
+  REQUIRES_ACTION
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
+}
+
+enum BillingInterval {
+  MONTHLY
+  ANNUAL
+}
+
+model PaymentRecord {
+  id                String              @id @default(uuid())
+  orderId           String
+  tenantId          String
+  userId            String
+  provider          String              @default("sandbox")
+  providerPaymentId String?
+  providerOrderId   String?
+  amount            Decimal             @db.Decimal(12, 2)
+  currency          String              @default("INR")
+  status            PaymentRecordStatus @default(PENDING)
+  paymentMethod     String?
+  errorMessage      String?
+  paidAt            DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  order    Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  attempts PaymentAttempt[]
+  refunds  RefundRecord[]
+
+  @@index([orderId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([providerPaymentId])
+  @@index([status])
+  @@index([tenantId, status])
+  @@index([createdAt, status])
+  @@map("payment_records")
+}
+
+model PaymentAttempt {
+  id                String              @id @default(uuid())
+  paymentRecordId   String
+  attemptNumber     Int                 @default(1)
+  providerReference String?
+  status            PaymentRecordStatus @default(PENDING)
+  amount            Decimal             @db.Decimal(12, 2)
+  currency          String              @default("INR")
+  rawResponse       Json?
+  failureReason     String?
+  createdAt         DateTime            @default(now())
+
+  paymentRecord PaymentRecord @relation(fields: [paymentRecordId], references: [id], onDelete: Cascade)
+
+  @@index([paymentRecordId])
+  @@map("payment_attempts")
+}
+
+model RefundRecord {
+  id               String       @id @default(uuid())
+  paymentRecordId  String
+  orderId          String
+  tenantId         String
+  amount           Decimal      @db.Decimal(12, 2)
+  currency         String       @default("INR")
+  providerRefundId String?
+  reason           String?
+  status           RefundStatus @default(PENDING)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  paymentRecord PaymentRecord @relation(fields: [paymentRecordId], references: [id], onDelete: Cascade)
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([paymentRecordId])
+  @@index([orderId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([createdAt, status])
+  @@map("refund_records")
+}
+
+model PaymentWebhookEvent {
+  id          String   @id @default(uuid())
+  provider    String
+  eventId     String
+  eventType   String
+  payload     Json
+  processed   Boolean  @default(true)
+  processedAt DateTime @default(now())
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([eventType])
+  @@map("payment_webhook_events")
+}
+
+model SubscriptionPlan {
+  id                  String   @id @default(uuid())
+  name                String
+  slug                String   @unique
+  description         String?
+  priceMonthly        Decimal  @db.Decimal(12, 2)
+  priceAnnual         Decimal  @db.Decimal(12, 2)
+  currency            String   @default("INR")
+  maxProducts         Int      @default(50)
+  maxStaffMembers     Int      @default(2)
+  customDomainEnabled Boolean  @default(false)
+  analyticsEnabled    Boolean  @default(false)
+  prioritySupport     Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                     String             @id @default(uuid())
+  tenantId               String             @unique
+  planId                 String
+  status                 SubscriptionStatus @default(ACTIVE)
+  billingInterval        BillingInterval    @default(MONTHLY)
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean            @default(false)
+  cancelledAt            DateTime?
+  providerSubscriptionId String?
+  providerCustomerId     String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan     SubscriptionPlan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices SubscriptionInvoice[]
+
+  @@index([tenantId])
+  @@index([planId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model SubscriptionInvoice {
+  id                String    @id @default(uuid())
+  subscriptionId    String
+  tenantId          String
+  invoiceNumber     String    @unique
+  amount            Decimal   @db.Decimal(12, 2)
+  currency          String    @default("INR")
+  status            String    @default("PAID")
+  billingReason     String?
+  periodStart       DateTime
+  periodEnd         DateTime
+  paidAt            DateTime?
+  providerInvoiceId String?
+  createdAt         DateTime  @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([tenantId])
+  @@map("subscription_invoices")
+}
+
+// -----------------------------------------------------------------------------
+// Step 9: Shipping, Fulfilment & Order Tracking Models
+// -----------------------------------------------------------------------------
+
+enum ShipmentStatus {
+  PENDING
+  READY_TO_SHIP
+  SHIPPED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED
+  RETURN_TO_ORIGIN
+  CANCELLED
+}
+
+model ShippingRecord {
+  id             String         @id @default(uuid())
+  tenantId       String
+  orderId        String
+  provider       String         @default("sandbox")
+  trackingNumber String?
+  status         ShipmentStatus @default(PENDING)
+  packageWeight  Decimal        @db.Decimal(10, 2)
+  packageLength  Decimal?       @db.Decimal(10, 2)
+  packageWidth   Decimal?       @db.Decimal(10, 2)
+  packageHeight  Decimal?       @db.Decimal(10, 2)
+  shippingCost   Decimal        @default(0) @db.Decimal(12, 2)
+  currency       String         @default("INR")
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  carrierNote    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events ShipmentEvent[]
+
+  @@index([tenantId])
+  @@index([orderId])
+  @@index([trackingNumber])
+  @@index([status])
+  @@map("shipping_records")
+}
+
+model ShipmentEvent {
+  id               String         @id @default(uuid())
+  tenantId         String
+  shippingRecordId String
+  status           ShipmentStatus
+  description      String
+  location         String?
+  eventTimestamp   DateTime       @default(now())
+  source           String         @default("CARRIER_WEBHOOK")
+  createdAt        DateTime       @default(now())
+
+  shippingRecord ShippingRecord @relation(fields: [shippingRecordId], references: [id], onDelete: Cascade)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([shippingRecordId])
+  @@index([tenantId])
+  @@index([eventTimestamp])
+  @@map("shipment_events")
+}
+
+// -----------------------------------------------------------------------------
+// Step 10: Notifications & Background Jobs / Transactional Outbox Models
+// -----------------------------------------------------------------------------
+
+enum NotificationType {
+  ORDER_CREATED
+  ORDER_CANCELLED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  SHIPMENT_DISPATCHED
+  SHIPMENT_DELIVERED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_STATUS_CHANGED
+  SYSTEM_ALERT
+}
+
+model Notification {
+  id              String           @id @default(uuid())
+  tenantId        String?
+  recipientUserId String
+  type            NotificationType
+  title           String
+  message         String
+  data            Json?
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
+
+  recipient User    @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, readAt])
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD_LETTER
+}
+
+model OutboxEvent {
+  id          String            @id @default(uuid())
+  tenantId    String?
+  eventType   String
+  payload     Json
+  status      OutboxEventStatus @default(PENDING)
+  retryCount  Int               @default(0)
+  maxRetries  Int               @default(5)
+  lastError   String?
+  scheduledAt DateTime          @default(now())
+  processedAt DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@index([eventType])
+  @@index([tenantId])
+  @@map("outbox_events")
+}
+
+enum FileStatus {
+  PENDING
+  UPLOADED
+  VERIFIED
+  ATTACHED
+  REJECTED
+  DELETED
+}
+
+enum FilePurpose {
+  PRODUCT_IMAGE
+  STORE_LOGO
+  STORE_BANNER
+  PRIVATE_DOCUMENT
+}
+
+enum FileVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model StoredFile {
+  id               String         @id @default(uuid())
+  tenantId         String?
+  uploadedByUserId String
+  purpose          FilePurpose
+  objectKey        String         @unique
+  originalFileName String
+  contentType      String
+  fileSize         Int
+  checksum         String?
+  width            Int?
+  height           Int?
+  publicUrl        String?
+  status           FileStatus     @default(PENDING)
+  visibility       FileVisibility @default(PUBLIC)
+  errorMessage     String?
+  verifiedAt       DateTime?
+  attachedAt       DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  tenant     Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation(fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([uploadedByUserId])
+  @@index([status])
+  @@index([purpose])
+  @@index([createdAt])
+  @@map("stored_files")
+}
+
+// -----------------------------------------------------------------------------
+// Step 12: Super Admin Platform Audit Logging
+// -----------------------------------------------------------------------------
+
+enum AuditAction {
+  TENANT_SUSPENDED
+  TENANT_REACTIVATED
+  TENANT_STATUS_UPDATED
+  USER_SUSPENDED
+  USER_REACTIVATED
+  USER_STATUS_UPDATED
+  SUBSCRIPTION_CANCELLED
+  SUBSCRIPTION_PLAN_CHANGED
+  PLATFORM_ROLE_UPDATED
+  SYSTEM_MAINTENANCE
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  actorUserId String
+  action      AuditAction
+  targetType  String // "TENANT", "USER", "SUBSCRIPTION", "SYSTEM"
+  targetId    String
+  tenantId    String?
+  reason      String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  actor User @relation("UserAuditLogs", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

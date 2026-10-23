@@ -1,0 +1,150 @@
+/**
+ * GAUSHILP OS — REUSABLE FLUID ANIMATIONS
+ * Hardware accelerated (transform, opacity) with reduced-motion support
+ */
+
+@keyframes floatOrb1 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(30px, -40px, 0) scale(1.08);
+  }
+}
+
+@keyframes floatOrb2 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-35px, 35px, 0) scale(1.12);
+  }
+}
+
+@keyframes floatOrb3 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(25px, 30px, 0) scale(0.95);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(91, 92, 226, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(91, 92, 226, 0);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Animation Utility Classes */
+.animate-fade-in {
+  animation: fadeIn var(--transition-base) ease-out forwards;
+}
+
+.animate-fade-up {
+  animation: fadeInUp var(--transition-smooth) ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-smooth) ease-out forwards;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #f0f2fd 0%, #e5e8fa 50%, #f0f2fd 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite linear;
+}
+
+.orb-1 {
+  animation: floatOrb1 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+.orb-2 {
+  animation: floatOrb2 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+.orb-3 {
+  animation: floatOrb3 20s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Reduced Motion Override for Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .orb-1,
+  .orb-2,
+  .orb-3 {
+    animation: none !important;
+  }
+}

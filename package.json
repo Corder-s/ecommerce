@@ -1,0 +1,35 @@
+{
+  "name": "gaushilp-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-tenant e-commerce SaaS for artisans, gaushalas, and traditional handmade-product sellers",
+  "scripts": {
+    "build": "pnpm --filter @gaushilp/backend build && pnpm --filter @gaushilp/frontend build",
+    "build:backend": "pnpm --filter @gaushilp/backend build",
+    "build:frontend": "pnpm --filter @gaushilp/frontend build",
+    "start:backend": "pnpm --filter @gaushilp/backend start:prod",
+    "start:frontend": "pnpm --filter @gaushilp/frontend start",
+    "lint": "pnpm --filter @gaushilp/backend lint",
+    "lint:frontend": "pnpm --filter @gaushilp/frontend lint",
+    "format": "pnpm --filter @gaushilp/backend format",
+    "test": "pnpm --filter @gaushilp/backend test",
+    "test:frontend": "pnpm --filter @gaushilp/frontend test:phase-h",
+    "test:e2e": "pnpm --filter @gaushilp/backend test:e2e",
+    "load-test": "pnpm --filter @gaushilp/backend load-test",
+    "backup:db": "pnpm --filter @gaushilp/backend backup:db",
+    "restore:drill": "pnpm --filter @gaushilp/backend restore:drill",
+    "start:dev": "pnpm --filter @gaushilp/backend start:dev",
+    "dev:backend": "pnpm --filter @gaushilp/backend start:dev",
+    "dev:frontend": "pnpm --filter @gaushilp/frontend dev",
+    "dev": "pnpm --filter @gaushilp/backend start:dev",
+    "prisma:generate": "pnpm --filter @gaushilp/backend prisma:generate",
+    "prisma:validate": "pnpm --filter @gaushilp/backend prisma:validate",
+    "prisma:migrate:dev": "pnpm --filter @gaushilp/backend prisma:migrate:dev",
+    "prisma:migrate:deploy": "pnpm --filter @gaushilp/backend prisma:migrate:deploy",
+    "prisma:studio": "pnpm --filter @gaushilp/backend prisma:studio"
+  },
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
